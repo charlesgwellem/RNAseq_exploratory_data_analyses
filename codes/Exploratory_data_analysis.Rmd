@@ -58,7 +58,104 @@ I will however look at basic statistical approaches commonly used in RNA seq ana
 
 ## **Transcriptome alignment assessment**
 
-```{r}
+At a previous step not detailed in this analysis, transcript- and gene-level expression was calculated by probabilistic alignment using the RSEM software. The two result are saved in the **raw_data** folder.
 
+```{r}
+list.files("raw_data")
+genes <- read.table("raw_data/SRR1039508.genes.results",
+                    header = TRUE, stringsAsFactors = TRUE)
+
+head(genes) %>%
+  knitr::kable()
+isoforms <- read.table("raw_data/SRR1039508.isoforms.results",
+                       header = TRUE, stringsAsFactors = TRUE)
+head(isoforms) %>%
+  knitr::kable()
 ```
+
+Both genes and isoforms have a column names the **FPKM(fragments per kilobase of sequence per million mapped reads) **.
+
+I will confirm with the *split()* and *sapply()* functions that the FPKM column in genes is the sum of the FPKM colum in isoforms.
+
+```{r}
+fpkm.per.gene <- split(isoforms$FPKM, isoforms$gene_id)
+head(sapply(fpkm.per.gene, sum))
+head(genes$FPKM)
+```
+
+Alternatively
+
+```{r}
+library(dplyr)
+isoforms %>% group_by(gene_id) %>% summarize(sum = sum(FPKM)) 
+```
+
+I will obtain FPKM values from the genes values and log transform it and make a histogram. But before that, I will start by removing all genes with FPKM values of 0. The log transformation will be $\log10(x + 1)$.
+
+```{r}
+genes2 <- genes[genes$FPKM > 0, ]
+genes2$gene_id <- droplevels(genes2$gene_id)
+isoforms2 <- isoforms[isoforms$gene_id %in% genes2$gene_id, ]
+isoforms2$gene_id <- droplevels(isoforms2$gene_id)
+```
+
+To verify that the gene_id column in genes2 is equal to the levels of the gene_id column in isoforms2.
+
+```{r}
+stopifnot(all(genes2$gene_id == levels(isoforms2$gene_id)))
+```
+
+Plot of effective length vs expected count:
+
+```{r}
+head(genes2)
+plot(log(genes2$effective_length),
+     log(genes2$expected_count))
+```
+
+**Make a histogram of the FPKM in genes2**
+
+```{r fig.align='center'}
+genes2_fpkm <- log10(genes2$FPKM)
+genes2_fpkm_pos <- genes2_fpkm[genes2_fpkm > 0]
+median(genes2$FPKM)
+hist(log10(genes2$FPKM))
+```
+
+**With isoforms2 , calculate the maximum IsoPct for each gene**
+
+```{r}
+head(isoforms2)
+
+max.iso <- isoforms2 %>%
+              group_by(gene_id) %>%
+              summarize(max_isopc = max(IsoPct))
+hist(max.iso$max_isopc)
+mean(max.iso$max_isopc > 95)
+```
+
+**Is there a relationship between total expression and the maximum IsoPct for each gene?**
+
+```{r fig.align='center'}
+plot(max.iso$max_isopc,
+     log(max.iso$max_isopc))
+boxplot(split(log10(genes2$FPKM), 
+              cut(max.iso$max_isopc, 5)), xlab="max.iso", ylab="log10 FPKM")
+```
+
+**Calculate the number of isoforms per gene, and plot the maximum IsoPct against the number of isoforms:**
+
+```{r fig.align='center'}
+num.iso <- as.numeric(table(isoforms2$gene_id))
+plot(num.iso, max.iso$max_isopc)
+
+barplot(table(num.iso))
+barplot(table(num.iso[num.iso < 15]))
+```
+
+**TPM (transcripts per million)**, is a linear scaling of the FPKM, such that we would expect a gene with 1 TPM to have one molecule in a population of one million mRNAs.
+
+With genes2, plot the TPM over the FPKM.
+
+Confirm that TPM is equal to: (FPKM / sum(FPKM)) * 1e6
 
