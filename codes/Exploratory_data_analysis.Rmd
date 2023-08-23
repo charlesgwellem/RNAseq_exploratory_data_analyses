@@ -1,0 +1,64 @@
+---
+title: "Exploratory_data_analysis"
+author: "Charles Anchang"
+date: "Last compiled on `r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    theme: cosmo
+    highlight: monochrome
+    toc: yes
+    toc_float: no
+    toc_depth: 6
+    code_folding: hide
+  github_document:
+    theme: cosmo
+    highlight: monochrome
+    toc: yes
+    toc_float: no
+    toc_depth: 6
+    code_folding: hide
+  word_document:
+    toc: yes
+    toc_depth: '6'
+  pdf_document:
+    toc: yes
+    toc_depth: '6'
+editor_options:
+  chunk_output_type: console
+---
+
+```{css, echo=FALSE}
+<style>
+body, h1, h2, h3, h4 {
+    font-family: "Bookman", serif;
+}
+
+body {
+    color: #333333;
+}
+a, a:hover {
+    color: red;
+}
+pre {
+    font-size: 10px;
+}
+</style>
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Introduction
+
+RNA sequencing is a technique whereby RNA transcripts are converted to complementary DNA (cDNA) which is then sequenced to generate reads and the reads and mapped to a reference genome to generate counts which can be analysed statistically. But the statistical approaches differ than those used for microarrays because the RNA seq data consists of counts´and not intensities. Counts are modeled using the Poisson or negative binomial distribution. These techniques are implemented in the **EdgeR** and **DESeq2** packages which are some of the most widely used RNA seq data analysis. Major complications with RNA seq data analysis are the need to account for the effects of splicing and to account for isoformy. In this analysis, I will not touch details on this topic. However So, while we have approaches like edgeR, DESeq, and **DEXSeq** that basically count each gene or each exon and quantifies the amount. We also have techniques that try to determine from the reads what transcripts are present. Some of these actually try to do it from scratch, without a reference genome.
+Examples of these methods are **Trinity Oases**, **Cufflinks**, and **Scripture**.
+
+I will however look at basic statistical approaches commonly used in RNA seq analysis.
+
+## **Transcriptome alignment assessment**
+
+```{r}
+
+```
+
