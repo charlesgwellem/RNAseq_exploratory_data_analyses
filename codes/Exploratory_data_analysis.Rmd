@@ -165,3 +165,119 @@ With genes2, plot the TPM over the FPKM.
 
 Confirm that TPM is equal to: (FPKM / sum(FPKM)) * 1e6
 
+## **Normalization and EDA of gene counts**
+
+In this section, I will be examining the gene level expression from a study which studies the RNA-seq transcription profiling in airway smooth muscle tissue.
+
+The treatment of interest in this study was **dexamethasone** that binds to the glucocorticoid receptor and in general provides an anti-inflammatory response. When used in asthma, it helps to suppress autoimmune reactions which have undesirable symptoms. We have eight samples, four treated and four untreated. The files needed for the analysis are found in the bioconductor package called **airway**.
+
+### Count the number of reads which uniquely align to exns of different genes.
+
+Load the data, contained in **bam** and **gtf** files. GTF files has information about genes in the subset of chromosomes on interest. Please note that the bam and gtf files analysed here are not full but a subset.
+
+```{r}
+# BiocManager::install("airway")
+library(airway)
+library(tidyverse)
+
+dir <- system.file("extdata", package = "airway", mustWork = TRUE)
+csv.file <- file.path(dir, "sample_table.csv") # contains th counts table for all genes and samples
+sample.table <- read.csv(csv.file, row.names = 1)
+bam.files <- file.path(dir, paste0(sample.table$Run, "_subset.bam")) # subset bam files
+gtf.file <- file.path(dir, "Homo_sapiens.GRCh37.75_subset.gtf")
+```
+
+Look at the counts matrix
+
+```{r}
+sample.table %>%
+  head %>%
+  knitr::kable()
+```
+
+### Building a counts matrix
+
+```{r}
+# BiocManager::install("Rsamtools")
+library(Rsamtools)
+bam.list <- BamFileList(bam.files) # yieldsize specifies how many reads to be read in at a time by any function that will use the bam files. Best to read all at once, why I do not specify it.
+# BiocManager::install("GenomicFeatures")
+library(GenomicFeatures) # helps to build a transcript database which contains all info about different genes, transcripts and exons
+txdb <- makeTxDbFromGFF(gtf.file, format = "gtf") # txdb is a transcript database (db)
+exons.by.gene <- exonsBy(txdb, by = "gene") # extract a GRanges list in which each element specifies a gene and within that element, we have exons for that gene. 
+```
+
+Txdb objects are SQLite databases and can be saved with **saveDb** and can be loaded with **loadDb**. 
+
+Exploring the GRAnges object (exons.by.gene)
+
+```{r}
+exons.by.gene[[1]] %>%
+  head %>%
+  knitr::kable()
+```
+
+If we look at the first element in exons.by.gene object as in the table above, we get the exons for the first gene and the corresponding chromosome to which it is annotated.
+
+```{r}
+length(exons.by.gene)
+```
+
+The length of exons.by.gene gives us the number of genes in our subset.
+
+```{r}
+summary(elementNROWS(exons.by.gene))
+```
+
+The function *elementNROWS()* gives us the number of exons for every gene. We can see that some genes have only one exon, the another 70 and the mean number of exons is 12 in this subset.
+
+```{r}
+library(GenomicAlignments)
+se <- summarizeOverlaps(exons.by.gene,
+                        bam.list,
+                        mode = "Union",
+                        singleEnd = FALSE, # we want to count paired end reads
+                        ignore.strand = TRUE, # we have unstranded rna seq data
+                        fragments = TRUE) # used when we have paired end data
+colData(se) <- DataFrame(sample.table)
+```
+
+So the actual count table is stored in a SummarizedExperiment in the assay slot.
+
+```{r}
+colData(se)
+rowRanges(se)
+```
+
+```{r}
+dim(assay(se))
+```
+
+```{r}
+colSums(assay(se))
+```
+
+
+```{r}
+# BiocManager::install("Rsubread")
+library(Rsubread)
+
+# function below is an alternate function to count read in genes
+fc <- featureCounts(bam.files,
+                    annot.ext = gtf.file,
+                    isGTFAnnotationFile = TRUE,
+                    isPairedEnd = TRUE)
+names(fc)
+fc$counts %>%
+  head %>%
+  knitr::kable()
+```
+
+below I compare the first sample counts for the summarizeOverlaps call and for the counts.
+```{r fig.align='center'}
+plot(assay(se)[, 1], fc$counts[match(rownames(se),
+                                      rownames(fc$counts)), 1]);
+abline(0, 1)
+```
+
+From the graph above we see that the counts fall in the y = x line, indicatint that both methods yield similar results.

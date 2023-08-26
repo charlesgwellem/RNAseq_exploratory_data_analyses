@@ -520,7 +520,7 @@ display: none;
 
 <h1 class="title toc-ignore">Exploratory_data_analysis</h1>
 <h4 class="author">Charles Anchang</h4>
-<h4 class="date">Last compiled on 24 August, 2023</h4>
+<h4 class="date">Last compiled on 26 August, 2023</h4>
 
 </div>
 
@@ -531,6 +531,14 @@ display: none;
 libraries</strong></a></li>
 <li><a href="#transcriptome-alignment-assessment" id="toc-transcriptome-alignment-assessment"><strong>Transcriptome
 alignment assessment</strong></a></li>
+<li><a href="#normalization-and-eda-of-gene-counts" id="toc-normalization-and-eda-of-gene-counts"><strong>Normalization and
+EDA of gene counts</strong></a>
+<ul>
+<li><a href="#count-the-number-of-reads-which-uniquely-align-to-exns-of-different-genes." id="toc-count-the-number-of-reads-which-uniquely-align-to-exns-of-different-genes.">Count
+the number of reads which uniquely align to exns of different
+genes.</a></li>
+<li><a href="#building-a-counts-matrix" id="toc-building-a-counts-matrix">Building a counts matrix</a></li>
+</ul></li>
 </ul>
 </div>
 
@@ -877,6 +885,509 @@ of the FPKM, such that we would expect a gene with 1 TPM to have one
 molecule in a population of one million mRNAs.</p>
 <p>With genes2, plot the TPM over the FPKM.</p>
 <p>Confirm that TPM is equal to: (FPKM / sum(FPKM)) * 1e6</p>
+</div>
+<div id="normalization-and-eda-of-gene-counts" class="section level2">
+<h2><strong>Normalization and EDA of gene counts</strong></h2>
+<p>In this section, I will be examining the gene level expression from a
+study which studies the RNA-seq transcription profiling in airway smooth
+muscle tissue.</p>
+<p>The treatment of interest in this study was
+<strong>dexamethasone</strong> that binds to the glucocorticoid receptor
+and in general provides an anti-inflammatory response. When used in
+asthma, it helps to suppress autoimmune reactions which have undesirable
+symptoms. We have eight samples, four treated and four untreated. The
+files needed for the analysis are found in the bioconductor package
+called <strong>airway</strong>.</p>
+<div id="count-the-number-of-reads-which-uniquely-align-to-exns-of-different-genes." class="section level3">
+<h3>Count the number of reads which uniquely align to exns of different
+genes.</h3>
+<p>Load the data, contained in <strong>bam</strong> and
+<strong>gtf</strong> files. GTF files has information about genes in the
+subset of chromosomes on interest. Please note that the bam and gtf
+files analysed here are not full but a subset.</p>
+<div class="sourceCode" id="cb30"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" tabindex="-1"></a><span class="co"># BiocManager::install(&quot;airway&quot;)</span></span>
+<span id="cb30-2"><a href="#cb30-2" tabindex="-1"></a><span class="fu">library</span>(airway)</span>
+<span id="cb30-3"><a href="#cb30-3" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb30-4"><a href="#cb30-4" tabindex="-1"></a></span>
+<span id="cb30-5"><a href="#cb30-5" tabindex="-1"></a>dir <span class="ot">&lt;-</span> <span class="fu">system.file</span>(<span class="st">&quot;extdata&quot;</span>, <span class="at">package =</span> <span class="st">&quot;airway&quot;</span>, <span class="at">mustWork =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb30-6"><a href="#cb30-6" tabindex="-1"></a>csv.file <span class="ot">&lt;-</span> <span class="fu">file.path</span>(dir, <span class="st">&quot;sample_table.csv&quot;</span>) <span class="co"># contains th counts table for all genes and samples</span></span>
+<span id="cb30-7"><a href="#cb30-7" tabindex="-1"></a>sample.table <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(csv.file, <span class="at">row.names =</span> <span class="dv">1</span>)</span>
+<span id="cb30-8"><a href="#cb30-8" tabindex="-1"></a>bam.files <span class="ot">&lt;-</span> <span class="fu">file.path</span>(dir, <span class="fu">paste0</span>(sample.table<span class="sc">$</span>Run, <span class="st">&quot;_subset.bam&quot;</span>)) <span class="co"># subset bam files</span></span>
+<span id="cb30-9"><a href="#cb30-9" tabindex="-1"></a>gtf.file <span class="ot">&lt;-</span> <span class="fu">file.path</span>(dir, <span class="st">&quot;Homo_sapiens.GRCh37.75_subset.gtf&quot;</span>)</span></code></pre></div>
+<p>Look at the counts matrix</p>
+<div class="sourceCode" id="cb31"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" tabindex="-1"></a>sample.table <span class="sc">%&gt;%</span></span>
+<span id="cb31-2"><a href="#cb31-2" tabindex="-1"></a>  head <span class="sc">%&gt;%</span></span>
+<span id="cb31-3"><a href="#cb31-3" tabindex="-1"></a>  knitr<span class="sc">::</span><span class="fu">kable</span>()</span></code></pre></div>
+<table>
+<colgroup>
+<col width="11%" />
+<col width="11%" />
+<col width="8%" />
+<col width="6%" />
+<col width="6%" />
+<col width="11%" />
+<col width="10%" />
+<col width="11%" />
+<col width="10%" />
+<col width="13%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left"></th>
+<th align="left">SampleName</th>
+<th align="left">cell</th>
+<th align="left">dex</th>
+<th align="left">albut</th>
+<th align="left">Run</th>
+<th align="right">avgLength</th>
+<th align="left">Experiment</th>
+<th align="left">Sample</th>
+<th align="left">BioSample</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">SRR1039508</td>
+<td align="left">GSM1275862</td>
+<td align="left">N61311</td>
+<td align="left">untrt</td>
+<td align="left">untrt</td>
+<td align="left">SRR1039508</td>
+<td align="right">126</td>
+<td align="left">SRX384345</td>
+<td align="left">SRS508568</td>
+<td align="left">SAMN02422669</td>
+</tr>
+<tr class="even">
+<td align="left">SRR1039509</td>
+<td align="left">GSM1275863</td>
+<td align="left">N61311</td>
+<td align="left">trt</td>
+<td align="left">untrt</td>
+<td align="left">SRR1039509</td>
+<td align="right">126</td>
+<td align="left">SRX384346</td>
+<td align="left">SRS508567</td>
+<td align="left">SAMN02422675</td>
+</tr>
+<tr class="odd">
+<td align="left">SRR1039512</td>
+<td align="left">GSM1275866</td>
+<td align="left">N052611</td>
+<td align="left">untrt</td>
+<td align="left">untrt</td>
+<td align="left">SRR1039512</td>
+<td align="right">126</td>
+<td align="left">SRX384349</td>
+<td align="left">SRS508571</td>
+<td align="left">SAMN02422678</td>
+</tr>
+<tr class="even">
+<td align="left">SRR1039513</td>
+<td align="left">GSM1275867</td>
+<td align="left">N052611</td>
+<td align="left">trt</td>
+<td align="left">untrt</td>
+<td align="left">SRR1039513</td>
+<td align="right">87</td>
+<td align="left">SRX384350</td>
+<td align="left">SRS508572</td>
+<td align="left">SAMN02422670</td>
+</tr>
+<tr class="odd">
+<td align="left">SRR1039516</td>
+<td align="left">GSM1275870</td>
+<td align="left">N080611</td>
+<td align="left">untrt</td>
+<td align="left">untrt</td>
+<td align="left">SRR1039516</td>
+<td align="right">120</td>
+<td align="left">SRX384353</td>
+<td align="left">SRS508575</td>
+<td align="left">SAMN02422682</td>
+</tr>
+<tr class="even">
+<td align="left">SRR1039517</td>
+<td align="left">GSM1275871</td>
+<td align="left">N080611</td>
+<td align="left">trt</td>
+<td align="left">untrt</td>
+<td align="left">SRR1039517</td>
+<td align="right">126</td>
+<td align="left">SRX384354</td>
+<td align="left">SRS508576</td>
+<td align="left">SAMN02422673</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="building-a-counts-matrix" class="section level3">
+<h3>Building a counts matrix</h3>
+<div class="sourceCode" id="cb32"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" tabindex="-1"></a><span class="co"># BiocManager::install(&quot;Rsamtools&quot;)</span></span>
+<span id="cb32-2"><a href="#cb32-2" tabindex="-1"></a><span class="fu">library</span>(Rsamtools)</span>
+<span id="cb32-3"><a href="#cb32-3" tabindex="-1"></a>bam.list <span class="ot">&lt;-</span> <span class="fu">BamFileList</span>(bam.files) <span class="co"># yieldsize specifies how many reads to be read in at a time by any function that will use the bam files. Best to read all at once, why I do not specify it.</span></span>
+<span id="cb32-4"><a href="#cb32-4" tabindex="-1"></a><span class="co"># BiocManager::install(&quot;GenomicFeatures&quot;)</span></span>
+<span id="cb32-5"><a href="#cb32-5" tabindex="-1"></a><span class="fu">library</span>(GenomicFeatures) <span class="co"># helps to build a transcript database which contains all info about different genes, transcripts and exons</span></span>
+<span id="cb32-6"><a href="#cb32-6" tabindex="-1"></a>txdb <span class="ot">&lt;-</span> <span class="fu">makeTxDbFromGFF</span>(gtf.file, <span class="at">format =</span> <span class="st">&quot;gtf&quot;</span>) <span class="co"># txdb is a transcript database (db)</span></span>
+<span id="cb32-7"><a href="#cb32-7" tabindex="-1"></a>exons.by.gene <span class="ot">&lt;-</span> <span class="fu">exonsBy</span>(txdb, <span class="at">by =</span> <span class="st">&quot;gene&quot;</span>) <span class="co"># extract a GRanges list in which each element specifies a gene and within that element, we have exons for that gene. </span></span></code></pre></div>
+<p>Txdb objects are SQLite databases and can be saved with
+<strong>saveDb</strong> and can be loaded with
+<strong>loadDb</strong>.</p>
+<p>Exploring the GRAnges object (exons.by.gene)</p>
+<div class="sourceCode" id="cb33"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" tabindex="-1"></a>exons.by.gene[[<span class="dv">1</span>]] <span class="sc">%&gt;%</span></span>
+<span id="cb33-2"><a href="#cb33-2" tabindex="-1"></a>  head <span class="sc">%&gt;%</span></span>
+<span id="cb33-3"><a href="#cb33-3" tabindex="-1"></a>  knitr<span class="sc">::</span><span class="fu">kable</span>()</span></code></pre></div>
+<table>
+<thead>
+<tr class="header">
+<th align="left">seqnames</th>
+<th align="right">start</th>
+<th align="right">end</th>
+<th align="right">width</th>
+<th align="left">strand</th>
+<th align="right">exon_id</th>
+<th align="left">exon_name</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">1</td>
+<td align="right">11086580</td>
+<td align="right">11087705</td>
+<td align="right">1126</td>
+<td align="left">-</td>
+<td align="right">98</td>
+<td align="left">ENSE00000818830</td>
+</tr>
+<tr class="even">
+<td align="left">1</td>
+<td align="right">11090233</td>
+<td align="right">11090307</td>
+<td align="right">75</td>
+<td align="left">-</td>
+<td align="right">99</td>
+<td align="left">ENSE00000472123</td>
+</tr>
+<tr class="odd">
+<td align="left">1</td>
+<td align="right">11090805</td>
+<td align="right">11090939</td>
+<td align="right">135</td>
+<td align="left">-</td>
+<td align="right">100</td>
+<td align="left">ENSE00000743084</td>
+</tr>
+<tr class="even">
+<td align="left">1</td>
+<td align="right">11094885</td>
+<td align="right">11094963</td>
+<td align="right">79</td>
+<td align="left">-</td>
+<td align="right">101</td>
+<td align="left">ENSE00000743085</td>
+</tr>
+<tr class="odd">
+<td align="left">1</td>
+<td align="right">11097750</td>
+<td align="right">11097868</td>
+<td align="right">119</td>
+<td align="left">-</td>
+<td align="right">102</td>
+<td align="left">ENSE00003482788</td>
+</tr>
+<tr class="even">
+<td align="left">1</td>
+<td align="right">11097750</td>
+<td align="right">11097868</td>
+<td align="right">119</td>
+<td align="left">-</td>
+<td align="right">103</td>
+<td align="left">ENSE00003520086</td>
+</tr>
+</tbody>
+</table>
+<p>If we look at the first element in exons.by.gene object as in the
+table above, we get the exons for the first gene.</p>
+<div class="sourceCode" id="cb34"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" tabindex="-1"></a><span class="fu">length</span>(exons.by.gene)</span></code></pre></div>
+<pre><code>## [1] 20</code></pre>
+<p>The length of exons.by.gene gives us the number of genes in our
+subset.</p>
+<div class="sourceCode" id="cb36"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" tabindex="-1"></a><span class="fu">summary</span>(<span class="fu">elementNROWS</span>(exons.by.gene))</span></code></pre></div>
+<pre><code>##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+##    1.00    1.00    3.00   13.95   18.75   79.00</code></pre>
+<p>The function <em>elementNROWS()</em> gives us the number of exons for
+every gene. We can see that some genes have only one exon, the another
+70 and the mean number of exons is 12 in this subset.</p>
+<div class="sourceCode" id="cb38"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" tabindex="-1"></a><span class="fu">library</span>(GenomicAlignments)</span>
+<span id="cb38-2"><a href="#cb38-2" tabindex="-1"></a>se <span class="ot">&lt;-</span> <span class="fu">summarizeOverlaps</span>(exons.by.gene,</span>
+<span id="cb38-3"><a href="#cb38-3" tabindex="-1"></a>                        bam.list,</span>
+<span id="cb38-4"><a href="#cb38-4" tabindex="-1"></a>                        <span class="at">mode =</span> <span class="st">&quot;Union&quot;</span>,</span>
+<span id="cb38-5"><a href="#cb38-5" tabindex="-1"></a>                        <span class="at">singleEnd =</span> <span class="cn">FALSE</span>, <span class="co"># we want to count paired end reads</span></span>
+<span id="cb38-6"><a href="#cb38-6" tabindex="-1"></a>                        <span class="at">ignore.strand =</span> <span class="cn">TRUE</span>, <span class="co"># we have unstranded rna seq data</span></span>
+<span id="cb38-7"><a href="#cb38-7" tabindex="-1"></a>                        <span class="at">fragments =</span> <span class="cn">TRUE</span>) <span class="co"># used when we have paired end data</span></span>
+<span id="cb38-8"><a href="#cb38-8" tabindex="-1"></a><span class="fu">colData</span>(se) <span class="ot">&lt;-</span> <span class="fu">DataFrame</span>(sample.table)</span></code></pre></div>
+<p>So the actual count table is stored in a SummarizedExperiment in the
+assay slot.</p>
+<div class="sourceCode" id="cb39"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" tabindex="-1"></a><span class="fu">colData</span>(se)</span></code></pre></div>
+<pre><code>## DataFrame with 8 rows and 9 columns
+##             SampleName        cell         dex       albut         Run
+##            &lt;character&gt; &lt;character&gt; &lt;character&gt; &lt;character&gt; &lt;character&gt;
+## SRR1039508  GSM1275862      N61311       untrt       untrt  SRR1039508
+## SRR1039509  GSM1275863      N61311         trt       untrt  SRR1039509
+## SRR1039512  GSM1275866     N052611       untrt       untrt  SRR1039512
+## SRR1039513  GSM1275867     N052611         trt       untrt  SRR1039513
+## SRR1039516  GSM1275870     N080611       untrt       untrt  SRR1039516
+## SRR1039517  GSM1275871     N080611         trt       untrt  SRR1039517
+## SRR1039520  GSM1275874     N061011       untrt       untrt  SRR1039520
+## SRR1039521  GSM1275875     N061011         trt       untrt  SRR1039521
+##            avgLength  Experiment      Sample    BioSample
+##            &lt;integer&gt; &lt;character&gt; &lt;character&gt;  &lt;character&gt;
+## SRR1039508       126   SRX384345   SRS508568 SAMN02422669
+## SRR1039509       126   SRX384346   SRS508567 SAMN02422675
+## SRR1039512       126   SRX384349   SRS508571 SAMN02422678
+## SRR1039513        87   SRX384350   SRS508572 SAMN02422670
+## SRR1039516       120   SRX384353   SRS508575 SAMN02422682
+## SRR1039517       126   SRX384354   SRS508576 SAMN02422673
+## SRR1039520       101   SRX384357   SRS508579 SAMN02422683
+## SRR1039521        98   SRX384358   SRS508580 SAMN02422677</code></pre>
+<div class="sourceCode" id="cb41"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" tabindex="-1"></a><span class="fu">rowRanges</span>(se)</span></code></pre></div>
+<pre><code>## GRangesList object of length 20:
+## $ENSG00000009724
+## GRanges object with 18 ranges and 2 metadata columns:
+##        seqnames            ranges strand |   exon_id       exon_name
+##           &lt;Rle&gt;         &lt;IRanges&gt;  &lt;Rle&gt; | &lt;integer&gt;     &lt;character&gt;
+##    [1]        1 11086580-11087705      - |        98 ENSE00000818830
+##    [2]        1 11090233-11090307      - |        99 ENSE00000472123
+##    [3]        1 11090805-11090939      - |       100 ENSE00000743084
+##    [4]        1 11094885-11094963      - |       101 ENSE00000743085
+##    [5]        1 11097750-11097868      - |       102 ENSE00003482788
+##    ...      ...               ...    ... .       ...             ...
+##   [14]        1 11106948-11107176      - |       111 ENSE00003467404
+##   [15]        1 11106948-11107176      - |       112 ENSE00003489217
+##   [16]        1 11107260-11107280      - |       113 ENSE00001833377
+##   [17]        1 11107260-11107284      - |       114 ENSE00001472289
+##   [18]        1 11107260-11107290      - |       115 ENSE00001881401
+##   -------
+##   seqinfo: 1 sequence from an unspecified genome; no seqlengths
+## 
+## ...
+## &lt;19 more elements&gt;</code></pre>
+<div class="sourceCode" id="cb43"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" tabindex="-1"></a><span class="fu">dim</span>(<span class="fu">assay</span>(se))</span></code></pre></div>
+<pre><code>## [1] 20  8</code></pre>
+<div class="sourceCode" id="cb45"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb45-1"><a href="#cb45-1" tabindex="-1"></a><span class="fu">colSums</span>(<span class="fu">assay</span>(se))</span></code></pre></div>
+<pre><code>## SRR1039508 SRR1039509 SRR1039512 SRR1039513 SRR1039516 SRR1039517 SRR1039520 
+##       6478       6501       7699       6801       8009      10849       5254 
+## SRR1039521 
+##       9168</code></pre>
+<div class="sourceCode" id="cb47"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb47-1"><a href="#cb47-1" tabindex="-1"></a><span class="co"># BiocManager::install(&quot;Rsubread&quot;)</span></span>
+<span id="cb47-2"><a href="#cb47-2" tabindex="-1"></a><span class="fu">library</span>(Rsubread)</span>
+<span id="cb47-3"><a href="#cb47-3" tabindex="-1"></a></span>
+<span id="cb47-4"><a href="#cb47-4" tabindex="-1"></a><span class="co"># function below is an alternate function to count read in genes</span></span>
+<span id="cb47-5"><a href="#cb47-5" tabindex="-1"></a>fc <span class="ot">&lt;-</span> <span class="fu">featureCounts</span>(bam.files,</span>
+<span id="cb47-6"><a href="#cb47-6" tabindex="-1"></a>                    <span class="at">annot.ext =</span> gtf.file,</span>
+<span id="cb47-7"><a href="#cb47-7" tabindex="-1"></a>                    <span class="at">isGTFAnnotationFile =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb47-8"><a href="#cb47-8" tabindex="-1"></a>                    <span class="at">isPairedEnd =</span> <span class="cn">TRUE</span>)</span></code></pre></div>
+<pre><code>## 
+##         ==========     _____ _    _ ____  _____  ______          _____  
+##         =====         / ____| |  | |  _ \|  __ \|  ____|   /\   |  __ \ 
+##           =====      | (___ | |  | | |_) | |__) | |__     /  \  | |  | |
+##             ====      \___ \| |  | |  _ &lt;|  _  /|  __|   / /\ \ | |  | |
+##               ====    ____) | |__| | |_) | | \ \| |____ / ____ \| |__| |
+##         ==========   |_____/ \____/|____/|_|  \_\______/_/    \_\_____/
+##        Rsubread 2.14.2
+## 
+## //========================== featureCounts setting ===========================\\
+## ||                                                                            ||
+## ||             Input files : 8 BAM files                                      ||
+## ||                                                                            ||
+## ||                           SRR1039508_subset.bam                            ||
+## ||                           SRR1039509_subset.bam                            ||
+## ||                           SRR1039512_subset.bam                            ||
+## ||                           SRR1039513_subset.bam                            ||
+## ||                           SRR1039516_subset.bam                            ||
+## ||                           SRR1039517_subset.bam                            ||
+## ||                           SRR1039520_subset.bam                            ||
+## ||                           SRR1039521_subset.bam                            ||
+## ||                                                                            ||
+## ||              Paired-end : yes                                              ||
+## ||        Count read pairs : yes                                              ||
+## ||              Annotation : Homo_sapiens.GRCh37.75_subset.gtf (GTF)          ||
+## ||      Dir for temp files : .                                                ||
+## ||                 Threads : 1                                                ||
+## ||                   Level : meta-feature level                               ||
+## ||      Multimapping reads : counted                                          ||
+## || Multi-overlapping reads : not counted                                      ||
+## ||   Min overlapping bases : 1                                                ||
+## ||                                                                            ||
+## \\============================================================================//
+## 
+## //================================= Running ==================================\\
+## ||                                                                            ||
+## || Load annotation file Homo_sapiens.GRCh37.75_subset.gtf ...                 ||
+## ||    Features : 406                                                          ||
+## ||    Meta-features : 20                                                      ||
+## ||    Chromosomes/contigs : 1                                                 ||
+## ||                                                                            ||
+## || Process BAM file SRR1039508_subset.bam...                                  ||
+## ||    Paired-end reads are included.                                          ||
+## ||    Total alignments : 7142                                                 ||
+## ||    Successfully assigned alignments : 6734 (94.3%)                         ||
+## ||    Running time : 0.00 minutes                                             ||
+## ||                                                                            ||
+## || Process BAM file SRR1039509_subset.bam...                                  ||
+## ||    Paired-end reads are included.                                          ||
+## ||    Total alignments : 7200                                                 ||
+## ||    Successfully assigned alignments : 6773 (94.1%)                         ||
+## ||    Running time : 0.00 minutes                                             ||
+## ||                                                                            ||
+## || Process BAM file SRR1039512_subset.bam...                                  ||
+## ||    Paired-end reads are included.                                          ||
+## ||    Total alignments : 8536                                                 ||
+## ||    Successfully assigned alignments : 8008 (93.8%)                         ||
+## ||    Running time : 0.00 minutes                                             ||
+## ||                                                                            ||
+## || Process BAM file SRR1039513_subset.bam...                                  ||
+## ||    Paired-end reads are included.                                          ||
+## ||    Total alignments : 7544                                                 ||
+## ||    Successfully assigned alignments : 7101 (94.1%)                         ||
+## ||    Running time : 0.00 minutes                                             ||
+## ||                                                                            ||
+## || Process BAM file SRR1039516_subset.bam...                                  ||
+## ||    Paired-end reads are included.                                          ||
+## ||    Total alignments : 8818                                                 ||
+## ||    Successfully assigned alignments : 8342 (94.6%)                         ||
+## ||    Running time : 0.00 minutes                                             ||
+## ||                                                                            ||
+## || Process BAM file SRR1039517_subset.bam...                                  ||
+## ||    Paired-end reads are included.                                          ||
+## ||    Total alignments : 11850                                                ||
+## ||    Successfully assigned alignments : 11259 (95.0%)                        ||
+## ||    Running time : 0.00 minutes                                             ||
+## ||                                                                            ||
+## || Process BAM file SRR1039520_subset.bam...                                  ||
+## ||    Paired-end reads are included.                                          ||
+## ||    Total alignments : 5877                                                 ||
+## ||    Successfully assigned alignments : 5469 (93.1%)                         ||
+## ||    Running time : 0.00 minutes                                             ||
+## ||                                                                            ||
+## || Process BAM file SRR1039521_subset.bam...                                  ||
+## ||    Paired-end reads are included.                                          ||
+## ||    Total alignments : 10208                                                ||
+## ||    Successfully assigned alignments : 9594 (94.0%)                         ||
+## ||    Running time : 0.00 minutes                                             ||
+## ||                                                                            ||
+## || Write the final count table.                                               ||
+## || Write the read assignment summary.                                         ||
+## ||                                                                            ||
+## \\============================================================================//</code></pre>
+<div class="sourceCode" id="cb49"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb49-1"><a href="#cb49-1" tabindex="-1"></a><span class="fu">names</span>(fc)</span></code></pre></div>
+<pre><code>## [1] &quot;counts&quot;     &quot;annotation&quot; &quot;targets&quot;    &quot;stat&quot;</code></pre>
+<div class="sourceCode" id="cb51"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb51-1"><a href="#cb51-1" tabindex="-1"></a>fc<span class="sc">$</span>counts <span class="sc">%&gt;%</span></span>
+<span id="cb51-2"><a href="#cb51-2" tabindex="-1"></a>  head <span class="sc">%&gt;%</span></span>
+<span id="cb51-3"><a href="#cb51-3" tabindex="-1"></a>  knitr<span class="sc">::</span><span class="fu">kable</span>()</span></code></pre></div>
+<table>
+<colgroup>
+<col width="8%" />
+<col width="11%" />
+<col width="11%" />
+<col width="11%" />
+<col width="11%" />
+<col width="11%" />
+<col width="11%" />
+<col width="11%" />
+<col width="11%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left"></th>
+<th align="right">SRR1039508_subset.bam</th>
+<th align="right">SRR1039509_subset.bam</th>
+<th align="right">SRR1039512_subset.bam</th>
+<th align="right">SRR1039513_subset.bam</th>
+<th align="right">SRR1039516_subset.bam</th>
+<th align="right">SRR1039517_subset.bam</th>
+<th align="right">SRR1039520_subset.bam</th>
+<th align="right">SRR1039521_subset.bam</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">ENSG00000175262</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">4</td>
+<td align="right">1</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">1</td>
+<td align="right">0</td>
+</tr>
+<tr class="even">
+<td align="left">ENSG00000215785</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">1</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+</tr>
+<tr class="odd">
+<td align="left">ENSG00000264181</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+</tr>
+<tr class="even">
+<td align="left">ENSG00000207213</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+</tr>
+<tr class="odd">
+<td align="left">ENSG00000120948</td>
+<td align="right">2752</td>
+<td align="right">2080</td>
+<td align="right">3353</td>
+<td align="right">1617</td>
+<td align="right">3521</td>
+<td align="right">3716</td>
+<td align="right">2220</td>
+<td align="right">1991</td>
+</tr>
+<tr class="even">
+<td align="left">ENSG00000009724</td>
+<td align="right">38</td>
+<td align="right">28</td>
+<td align="right">66</td>
+<td align="right">24</td>
+<td align="right">42</td>
+<td align="right">41</td>
+<td align="right">47</td>
+<td align="right">36</td>
+</tr>
+</tbody>
+</table>
+<p>below I compare the first sample counts for the summarizeOverlaps
+call and for the counts.</p>
+<div class="sourceCode" id="cb52"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb52-1"><a href="#cb52-1" tabindex="-1"></a><span class="fu">plot</span>(<span class="fu">assay</span>(se)[, <span class="dv">1</span>], fc<span class="sc">$</span>counts[<span class="fu">match</span>(<span class="fu">rownames</span>(se),</span>
+<span id="cb52-2"><a href="#cb52-2" tabindex="-1"></a>                                      <span class="fu">rownames</span>(fc<span class="sc">$</span>counts)), <span class="dv">1</span>]);</span>
+<span id="cb52-3"><a href="#cb52-3" tabindex="-1"></a><span class="fu">abline</span>(<span class="dv">0</span>, <span class="dv">1</span>)</span></code></pre></div>
+<p><img src="data:image/png;base64,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" width="672" style="display: block; margin: auto;" /></p>
+<p>From the graph above we see that the counts fall in the y = x line,
+indicatint that both methods yield similar results.</p>
+</div>
 </div>
 
 
