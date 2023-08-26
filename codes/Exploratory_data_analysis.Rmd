@@ -49,12 +49,19 @@ pre {
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 ```
 
-## Introduction
+## **Introduction**
 
 RNA sequencing is a technique whereby RNA transcripts are converted to complementary DNA (cDNA) which is then sequenced to generate reads and the reads and mapped to a reference genome to generate counts which can be analysed statistically. But the statistical approaches differ than those used for microarrays because the RNA seq data consists of counts´and not intensities. Counts are modeled using the Poisson or negative binomial distribution. These techniques are implemented in the **EdgeR** and **DESeq2** packages which are some of the most widely used RNA seq data analysis. Major complications with RNA seq data analysis are the need to account for the effects of splicing and to account for isoformy. In this analysis, I will not touch details on this topic. However So, while we have approaches like edgeR, DESeq, and **DEXSeq** that basically count each gene or each exon and quantifies the amount. We also have techniques that try to determine from the reads what transcripts are present. Some of these actually try to do it from scratch, without a reference genome.
 Examples of these methods are **Trinity Oases**, **Cufflinks**, and **Scripture**.
 
 I will however look at basic statistical approaches commonly used in RNA seq analysis.
+
+## **Load libraries**
+
+```{r}
+library(dplyr) # wrangling
+```
+
 
 ## **Transcriptome alignment assessment**
 
@@ -86,7 +93,6 @@ head(genes$FPKM)
 Alternatively
 
 ```{r}
-library(dplyr)
 isoforms %>% group_by(gene_id) %>% summarize(sum = sum(FPKM)) 
 ```
 
