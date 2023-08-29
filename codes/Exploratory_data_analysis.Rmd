@@ -281,3 +281,45 @@ abline(0, 1)
 ```
 
 From the graph above we see that the counts fall in the y = x line, indicatint that both methods yield similar results.
+
+## **Normalizing for sequencing depth**
+
+### Visualising sample - sample distances
+
+```{r fig.align='center'}
+library(airway)
+data(airway)
+airway
+```
+
+```{r}
+colData(airway)
+```
+
+The table above contains metadata.
+
+```{r}
+rowRanges(airway)
+```
+
+The above this is GRangesList, where each element is a gene and it contains the exons of that gene.
+
+```{r}
+head(assay(airway))
+```
+
+The table above contains the counts of the various genes for each sample. The counts are the number of paired-end reads which align to each gene.
+
+However, to be accurate about the number of reads which align to each gene, there are a number of issues to account for. One of them is the sequencing depth. The sequencing depth is the number of reads which aligned to genes.
+
+```{r}
+colSums(assay(airway))
+```
+
+The results from the command above gives the number of paired end reads which align the genes of each sample and we can sort that by  million.
+
+```{r}
+sort(colSums(assay(airway)))/ 10e6
+```
+
+We see the range is from 15 million to 30 million and this is a technical artifact we want to account for.
