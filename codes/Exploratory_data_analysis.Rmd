@@ -284,7 +284,7 @@ From the graph above we see that the counts fall in the y = x line, indicatint t
 
 ## **Normalizing for sequencing depth**
 
-### Visualising sample - sample distances
+### By taking the log2
 
 ```{r fig.align='center'}
 library(airway)
@@ -319,7 +319,153 @@ colSums(assay(airway))
 The results from the command above gives the number of paired end reads which align the genes of each sample and we can sort that by  million.
 
 ```{r}
-sort(colSums(assay(airway)))/ 10e6
+sort(colSums(assay(airway)))/ 1e6
 ```
 
-We see the range is from 15 million to 30 million and this is a technical artifact we want to account for.
+We see the range is from 15 million to 30 million and this is a technical artifact we want to account for. If we also just look at the raw counts, we realise that the variance is much higher for large counts than for small counts, so if we compare the raw counts vector, the genes that have a very high count would be more important, and they would be adding more information to the distance than the small count genes.
+
+```{r fig.align='center'}
+plot(assay(airway)[, 1:2], cex = 0.1)
+```
+
+So we're going to first try out taking the log and dividing by a robust estimate of the sequencing depth,
+in order to make a distance comparison between samples. In order to have a robust estimate of the differences in sequencing depth, we're going to use the DESeq2 package.
+
+```{r}
+# BiocManager::install("DESeq2")
+library(DESeq2)
+
+dds <- DESeqDataSet(airway, design =  ~ cell + dex) # you can also put ~ 1 if you do not know what to ut, just to estimate the size factors.
+```
+
+We can also make a *DESeqDataSet* from count matrix and column data.
+
+The following estimates size factors to account for differences in sequencing depth, and is only necessary to have the `logcounts` object below.
+
+```{r}
+library(rafalib)
+
+dds <- estimateSizeFactors(dds) # gives robust estimate in differences in sequencing depth.
+sizeFactors(dds)
+colSums(counts(dds))
+plot(sizeFactors(dds), colSums(counts(dds)))
+abline(lm(colSums(counts(dds)) ~ sizeFactors(dds) + 0) )
+```
+
+So the size factors are generally around one. When they're lower, it indicates that a sample had lower sequencing depth.And when they're higher-- for here, 1.4-- it indicates that a sample had higher sequencing depth.  
+
+So we can see that a fitted line which also goes through zero generally follows the column sums.
+But the reason why the size factors are considered more robustis that if we had a single count with a very large value-- so if one of the genes had 10 million counts-- this would have a huge effect on the column sums, but it would have almost no effect on the size factors, because they're calculated using the median.
+
+```{r}
+loggeomeans <- rowMeans(log(counts(dds)))
+hist(log(counts(dds)[, 1]) - loggeomeans,
+     col = "grey", maint ="", xlab = "", breaks = 40)
+```
+
+We can take a matrix of the log counts normalised by sequencing depth:
+
+```{r}
+log.norm.count <- log2(counts(dds, normalized = TRUE) + 1)
+```
+
+To see what would happen if we had not normalised by sequencing depth:
+
+```{r fig.align='center'}
+rs <- rowSums(counts(dds))
+mypar(1, 2)
+boxplot(log2(counts(dds)[rs > 0, ] + 1)) # not normalised
+boxplot(log.norm.count[rs > 0, ]) # normalised
+```
+
+You can see that from the top of the box, which is the 3/4 quartile,and from the median, for example, which is the thick line, in the left plot is jagged and on the right plot it's more flat. So normalizing for sequencing depth is an important first step. And we've also taken the log, and the log has brought the data onto a more comparable scale.
+
+Plotting distances between two samples for the normalised data
+
+```{r fig.align='center'}
+mypar(1, 1)
+plot(log.norm.count[, 1:2])
+```
+
+We see from the plot above that there is more stable variance between the two samples than in the previous related plot.So the variance between the two samples is more constant along the range. So whereas before, this trumpeted out towards the higher values, now the variance between the two samples is more flat.
+Although at the bottom here, where the counts become very close to zero, there is a higher spread, and that's what we're going to examine in the next video.
+
+### By stabilising the count variance
+
+So in this section, we're going to discuss a more sophisticated transformation, which helps to stabilize the variance at different levels of the mean. We use the `rlog` from the DESeq2 package, which is suitable when the size factors vary widely. The result of using the rlog transformation is to shrink together the values for the genes that have very low counts, and that's where the term regularization comes in, which is typically, in statistics, a shrinkage. And for the genes that have medium to high counts, the rlog will be very close to the log2 transform. So we can immediately use the same plot to compare just the rlog
+values for two samples.
+
+```{r}
+rld <- rlog(dds)
+```
+
+So we can immediately use the same plot to compare just the rlog values for two samples. So we can see now that at the low end-- so, for example, when the log2 is less than 1 in this area, the values for the two samples are shrunk together to the identity line.
+
+```{r}
+plot(assay(rld)[, 1], assay(rld)[, 2], cex = 0.1)
+```
+
+So another plot to examine the difference between these two transformations, the log2 and the rlog, is
+in the `vsn` package, which contains a mean standard deviation plot. And the means standard deviation plot for each gene calculates the mean over all samples and the standard deviation over all samples.
+
+```{r fig.align='center'}
+# BiocManager::install("vsn")
+library(vsn)
+mypar(1, 2)
+meanSdPlot(log.norm.count, ranks = FALSE, ylim = c(0, 3))
+meanSdPlot(assay(rld), ranks = FALSE, ylim = c(0, 3))
+```
+
+And by comparing the two plots, you can see that the standard deviation spikes early for the log2 plus 1 matrix, and it slowly builds up from 0 for the rlog matrix. So for the rlog matrix, the genes that have a count larger than 5, so for a count larger than 32, those are the genes with the high standard deviation.
+Whereas on the left, the genes that have a mean count of 1 are the genes that have the high standard deviation. So this stabilization of the variance is a useful property of the rlog.
+
+**Principal components analysis**
+
+One of the most important plots that we can make for exploratory data analysis is a principal component plot.
+
+```{r fig.align='center'}
+mypar()
+rv <- apply(log.norm.count, 1, var)
+topgenes <- head(order(rv, decreasing = TRUE), 500)
+pc <- prcomp(t(log.norm.count[topgenes, ]))
+plot(pc$x[, 1], pc$x[, 2],
+     col = colData(dds)$dex,
+     pch = as.integer(colData(dds)$cell))
+```
+
+Plotting pca on the rlog object
+
+```{r}
+plotPCA(rld, intgroup = "dex")
+plotPCA(rld, intgroup = c("dex", "cell"))
+```
+
+PCA plot with `ggplot` library
+
+```{r fig.align='center'}
+library(ggplot2)
+(data <- plotPCA(rld, intgroup = c("dex", "cell"), returnData = TRUE))
+(percentVar <- 100 * round(attr(data, "percentVar"), 2))
+makeLab <- function(x, pc) paste0("PC", pc, ": ", x, "% variance")
+ggplot(data, aes(PC1, PC2, col = dex, shape = cell)) +
+  geom_point() +
+  xlab(makeLab(percentVar[1], 1)) +
+  ylab(makeLab(percentVar[2], 2))
+```
+
+So now we can see we have the color separating treated and untreated,and the plotting symbol designates the cell type. So the principal component plot is a highly recommended exploratory plot.
+
+And the last plot we're going to make in this exploratory section is a hierarchical clustering based on the Euclidean distance between the transformed count matrices.
+
+```{r fig.align='center'}
+mypar(2, 1)
+plot(hclust(dist(t(log.norm.count))), labels = colData(dds)$dex)
+plot(hclust(dist(t(assay(rld)))), labels = colData(rld)$dex)
+```
+
+## **Session information**
+
+```{r}
+sessionInfo()
+```
+
